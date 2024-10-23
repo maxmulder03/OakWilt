@@ -12,24 +12,24 @@ import logging
 import json
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {'origins': "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-DESTINATION_PATH = "E:/Research/Vue-Flusk/dnr/sample_images"
-RESULTS_PATH = "E:/Research/Vue-Flusk/dnr/Results"
-MODEL_PATH = 'E:/Research/Vue-Flusk/dnr/oak_wilt_demo2.h5'
-FEEDBACK_FILE_PATH = os.path.join(DESTINATION_PATH, 'feedback.json')
+ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif"}
+DESTINATION_PATH = ""
+RESULTS_PATH = ""
+MODEL_PATH = ""
+FEEDBACK_FILE_PATH = os.path.join(DESTINATION_PATH, "feedback.json")
 
 logging.basicConfig(level=logging.INFO)
 
 # Load the model
 model = tf.keras.models.load_model(MODEL_PATH)
 
-@app.route('/', methods=['GET'])
+@app.route("/", methods=["GET"])
 def greetings():
     return "Hello, world!"
 
-@app.route("/upload-images", methods=['POST'])
+@app.route("/upload-images", methods=["POST"])
 def upload_images():
     results = {
         "THIS PICTURE HAS OAK WILT": [],
@@ -37,10 +37,10 @@ def upload_images():
         "CHANGES OF COLORS ON TREE LEAVES": [],
         "Not an Oak Wilt": []
     }
-    uploaded_files = request.files.getlist('file')
+    uploaded_files = request.files.getlist("file")
 
     if not uploaded_files:
-        return 'No files to upload', 400
+        return "No files to upload", 400
 
     for file in uploaded_files:
         if file and allowed_file(file.filename):
@@ -67,13 +67,13 @@ def upload_images():
                     category = "Not an Oak Wilt"
 
                 gps_data = get_gps_data(save_path)
-                lat, lon = gps_data['lat'], gps_data['lon']
+                lat, lon = gps_data["lat"], gps_data["lon"]
                 results[category].append({
-                    'filename': filename,
-                    'prediction': f"{prediction:.2f}%",
-                    'classification': category,
-                    'latitude': lat,
-                    'longitude': lon
+                    "filename": filename,
+                    "prediction": f"{prediction:.2f}%",
+                    "classification": category,
+                    "latitude": lat,
+                    "longitude": lon
                 })
             except Exception as e:
                 logging.error(f"Error processing file {filename}: {e}")
@@ -84,7 +84,7 @@ def upload_images():
         filtered_results = sum([items for key, items in results.items() if key != "Not an Oak Wilt"], [])
         if filtered_results:
             results_df = pd.DataFrame(filtered_results)
-            csv_file_path = os.path.join(RESULTS_PATH, 'results.csv')
+            csv_file_path = os.path.join(RESULTS_PATH, "results.csv")
             results_df.to_csv(csv_file_path, index=False)
             logging.info(f"CSV file created at {csv_file_path}")
 
@@ -94,25 +94,25 @@ def upload_images():
             }
 
             for item in filtered_results:
-                if item['latitude'] and item['longitude']:
+                if item["latitude"] and item["longitude"]:
                     feature = {
                         "type": "Feature",
                         "properties": {
-                            "filename": item['filename'],
-                            "prediction": item['prediction'],
-                            "classification": item['classification'],
-                            "latitude": item['latitude'],
-                            "longitude": item['longitude']
+                            "filename": item["filename"],
+                            "prediction": item["prediction"],
+                            "classification": item["classification"],
+                            "latitude": item["latitude"],
+                            "longitude": item["longitude"]
                         },
                         "geometry": {
                             "type": "Point",
-                            "coordinates": [item['longitude'], item['latitude']]
+                            "coordinates": [item["longitude"], item["latitude"]]
                         }
                     }
                     geojson_data["features"].append(feature)
 
-            geojson_file_path = os.path.join(RESULTS_PATH, 'results.geojson')
-            with open(geojson_file_path, 'w') as geojson_file:
+            geojson_file_path = os.path.join(RESULTS_PATH, "results.geojson")
+            with open(geojson_file_path, "w") as geojson_file:
                 json.dump(geojson_data, geojson_file)
             logging.info(f"GeoJSON file created at {geojson_file_path}")
         else:
@@ -131,54 +131,54 @@ def upload_images():
 
     return jsonify(response_data)
 
-@app.route('/submit-feedback', methods=['POST'])
+@app.route("/submit-feedback", methods=["POST"])
 def submit_feedback():
     feedback_data = request.get_json()
     
-    if not feedback_data or 'filename' not in feedback_data or 'isCorrect' not in feedback_data:
-        return jsonify({'message': 'Invalid feedback data'}), 400
+    if not feedback_data or "filename" not in feedback_data or "isCorrect" not in feedback_data:
+        return jsonify({"message": "Invalid feedback data"}), 400
     
-    filename = feedback_data['filename']
-    is_correct = feedback_data['isCorrect']
+    filename = feedback_data["filename"]
+    is_correct = feedback_data["isCorrect"]
 
     # Load existing feedback
     try:
-        with open(FEEDBACK_FILE_PATH, 'r') as file:
+        with open(FEEDBACK_FILE_PATH, "r") as file:
             feedback_list = json.load(file)
     except FileNotFoundError:
         feedback_list = []
 
     # Append new feedback
     feedback_list.append({
-        'filename': filename,
-        'isCorrect': is_correct
+        "filename": filename,
+        "isCorrect": is_correct
     })
 
     # Save feedback
-    with open(FEEDBACK_FILE_PATH, 'w') as file:
+    with open(FEEDBACK_FILE_PATH, "w") as file:
         json.dump(feedback_list, file)
     
     # Retrain the model based on feedback
     retrain_model(feedback_data)
 
-    return jsonify({'message': 'Feedback received'}), 200
+    return jsonify({"message": "Feedback received"}), 200
 
-@app.route('/images/<filename>')
+@app.route("/images/<filename>")
 def serve_image(filename):
     return send_from_directory(DESTINATION_PATH, filename)
 
-@app.route('/results.csv', methods=['GET'])
+@app.route("/results.csv", methods=["GET"])
 def download_results_csv():
     try:
-        return send_from_directory(RESULTS_PATH, 'results.csv', as_attachment=True)
+        return send_from_directory(RESULTS_PATH, "results.csv", as_attachment=True)
     except Exception as e:
         logging.error(f"Error sending results.csv: {e}")
         return jsonify({"message": "Error sending results.csv"}), 500
 
-@app.route('/results.geojson', methods=['GET'])
+@app.route("/results.geojson", methods=["GET"])
 def download_results_geojson():
     try:
-        return send_from_directory(RESULTS_PATH, 'results.geojson', as_attachment=True)
+        return send_from_directory(RESULTS_PATH, "results.geojson", as_attachment=True)
     except Exception as e:
         logging.error(f"Error sending results.geojson: {e}")
         return jsonify({"message": "Error sending results.geojson"}), 500
@@ -196,27 +196,27 @@ def get_gps_data(image_path):
     with Image.open(image_path) as img:
         exif_data = img._getexif()
         if not exif_data:
-            return {'lat': None, 'lon': None}
+            return {"lat": None, "lon": None}
 
         lat, lon = get_decimal_coordinates(exif_data)
-        return {'lat': lat, 'lon': lon}
+        return {"lat": lat, "lon": lon}
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_decimal_coordinates(info):
     for tag, value in info.items():
         decoded = ExifTags.TAGS.get(tag, tag)
-        if decoded == 'GPSInfo':
+        if decoded == "GPSInfo":
             gps_data = {}
             for t in value:
                 sub_decoded = ExifTags.GPSTAGS.get(t, t)
                 gps_data[sub_decoded] = value[t]
 
-            gps_lat = gps_data['GPSLatitude']
-            gps_lat_ref = gps_data['GPSLatitudeRef']
-            gps_lon = gps_data['GPSLongitude']
-            gps_lon_ref = gps_data['GPSLongitudeRef']
+            gps_lat = gps_data["GPSLatitude"]
+            gps_lat_ref = gps_data["GPSLatitudeRef"]
+            gps_lon = gps_data["GPSLongitude"]
+            gps_lon_ref = gps_data["GPSLongitudeRef"]
 
             lat = convert_to_degrees(gps_lat)
             if gps_lat_ref != "N":
@@ -234,16 +234,16 @@ def convert_to_degrees(value):
     return d + (m / 60.0) + (s / 3600.0)
 
 def retrain_model(feedback_data):
-    img_path = os.path.join(DESTINATION_PATH, feedback_data['filename'])
+    img_path = os.path.join(DESTINATION_PATH, feedback_data["filename"])
     img = cv2.imread(img_path)
     img_preprocessed = preprocess_image(img)
     
-    label = 0 if feedback_data['isCorrect'] else 1  # Assuming binary classification
+    label = 0 if feedback_data["isCorrect"] else 1  # Assuming binary classification
     x_train = np.array([img_preprocessed])
     y_train = np.array([label])
     
     # Recompile the model before retraining
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
     model.fit(x_train, y_train, epochs=1, verbose=1)
     model.save(MODEL_PATH)
 
